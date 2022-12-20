@@ -2,11 +2,8 @@ package grpcgateway
 
 import (
 	"github.com/bazelbuild/bazel-gazelle/label"
-	"github.com/bazelbuild/bazel-gazelle/rule"
-	"github.com/stackb/rules_proto/pkg/plugin/golang/protobuf"
 	"github.com/stackb/rules_proto/pkg/protoc"
 	"path"
-	"strings"
 )
 
 func init() {
@@ -26,12 +23,10 @@ func (p *protocGenGrpcGatewayPlugin) Configure(ctx *protoc.PluginContext) *proto
 	if !p.shouldApply(ctx.ProtoLibrary) {
 		return nil
 	}
-	options := ctx.PluginConfig.GetOptions()
-	mappings, _ := protobuf.GetImportMappings(options)
 	return &protoc.PluginConfiguration{
 		Label:   label.New("build_stack_rules_proto", "plugin/grpc-ecosystem/grpc-gateway", "protoc-gen-grpc-gateway"),
-		Outputs: p.outputs(ctx.ProtoLibrary, mappings),
-		Options: options,
+		Outputs: p.outputs(ctx.Rel, ctx.ProtoLibrary),
+		Options: ctx.PluginConfig.GetOptions(),
 	}
 }
 
@@ -59,24 +54,17 @@ func appliesToFile(f *protoc.File) bool {
 	return false
 }
 
-func (p *protocGenGrpcGatewayPlugin) outputs(lib protoc.ProtoLibrary, importMappings map[string]string) []string {
+func (p *protocGenGrpcGatewayPlugin) outputs(rel string, lib protoc.ProtoLibrary) []string {
 	srcs := make([]string, 0)
 	for _, f := range lib.Files() {
 		if !appliesToFile(f) {
 			continue
 		}
 		base := f.Name
-		pkg := f.Package()
-		if mapping := importMappings[path.Join(f.Dir, f.Basename)]; mapping != "" {
-			base = path.Join(mapping, base)
-		} else {
-			base = path.Join(strings.ReplaceAll(pkg.Name, ".", "/"), base)
+		if rel != "" {
+			base = path.Join(rel, base)
 		}
 		srcs = append(srcs, base+".pb.gw.go")
 	}
 	return srcs
-}
-
-func (p *protocGenGrpcGatewayPlugin) ResolvePluginOptions(cfg *protoc.PluginConfiguration, r *rule.Rule, from label.Label) []string {
-	return protobuf.ResolvePluginOptionsTransitive(cfg, r, from)
 }
